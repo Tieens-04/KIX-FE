@@ -69,6 +69,13 @@ export interface Store {
   manager_id?: string | null;
   manager?: { id: string; name: string; email: string } | null;
   status?: string;
+  hours?: string;
+  image?: string | null;
+  badge?: string | null;
+  featured?: boolean;
+  features?: string[];
+  lat?: number;
+  lng?: number;
   createdAt?: string;
 }
 
@@ -94,6 +101,7 @@ export interface OrderItem {
   sku_id: any;
   store_id: any;
   product_name?: string;
+  product_image?: string | null;
   size?: number;
   color?: string;
   sku_code?: string;
@@ -112,11 +120,42 @@ export interface Order {
   customer_phone?: string;
   shipping_address: Address;
   items: OrderItem[];
+  subtotal?: number;
+  tax?: number;
+  discount_amount?: number;
+  promo_code?: string | null;
+  promotion_id?: string | null;
   total: number;
   payment_method?: string;
   payment_status?: string;
   status: 'pending' | 'paid' | 'completed' | 'cancelled';
   createdAt?: string;
+}
+
+// ============ Promotion ============
+export interface Promotion {
+  id: string;
+  _id?: string;
+  code: string;
+  description?: string;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  min_order_value: number;
+  max_discount_amount: number | null;
+  start_date: string;
+  end_date: string;
+  usage_limit: number | null;
+  used_count: number;
+  is_active: boolean;
+  createdAt?: string;
+}
+
+export interface PromoValidationResult {
+  code: string;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  discount_amount: number;
+  description?: string;
 }
 
 // ============ Inventory ============

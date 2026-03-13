@@ -1,5 +1,6 @@
 import React from 'react';
 import { navigateWithTransition } from './PageTransition';
+import { formatPrice } from '../utils/formatPrice';
 
 interface Product {
     id: number;
@@ -54,7 +55,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({ products, onAddToCart }) => {
                                     </div>
                                 </div>
                                 <div className="flex justify-between items-end">
-                                    <p className="font-black text-charcoal text-5xl">${product.price}</p>
+                                    <p className="font-black text-charcoal text-5xl">{formatPrice(product.price)}</p>
                                     <div className="flex -space-x-4">
                                         <div className="size-10 rounded-full border-4 border-primary bg-charcoal shadow-lg"></div>
                                         <div className="size-10 rounded-full border-4 border-primary bg-white shadow-lg"></div>
@@ -107,9 +108,9 @@ const ProductGrid: React.FC<ProductGridProps> = ({ products, onAddToCart }) => {
                             <p className="text-xs font-bold opacity-40 mb-8 uppercase tracking-[0.2em]">{product.category} • {product.color}</p>
                             <div className="flex justify-between items-center border-t border-gray-100 dark:border-border-dark pt-6">
                                 <div className="flex items-center gap-3">
-                                    <p className={`font-black text-4xl ${product.originalPrice ? 'text-primary' : ''}`}>${product.price.toFixed(2)}</p>
+                                    <p className={`font-black text-4xl ${product.originalPrice ? 'text-primary' : ''}`}>{formatPrice(product.price)}</p>
                                     {product.originalPrice && (
-                                        <p className="text-xs font-bold opacity-30 line-through">${product.originalPrice}</p>
+                                        <p className="text-xs font-bold opacity-30 line-through">{formatPrice(product.originalPrice)}</p>
                                     )}
                                 </div>
                                 <button

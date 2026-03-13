@@ -15,6 +15,7 @@ const NAV_ITEMS = [
     { icon: 'local_shipping', label: 'Orders', path: '/admin/orders' },
     { icon: 'smart_toy', label: 'AI Assistant', path: '/admin/analytics' },
     { icon: 'person', label: 'Customers', path: '/admin/customers' },
+    { icon: 'local_offer', label: 'Promotions', path: '/admin/promotions' },
 ];
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeNav }) => {

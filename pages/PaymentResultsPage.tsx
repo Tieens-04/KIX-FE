@@ -1,63 +1,185 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import jsPDF from 'jspdf';
 import Footer from '../components/Footer';
 import { navigateWithTransition } from '../components/PageTransition';
-import { fadeInUp, staggerContainer, staggerItem, pageTransition } from '../utils/animations';
-
-// Purchased items
-const PURCHASED_ITEMS = [
-    {
-        id: 1,
-        name: 'VaporMax Flyknit',
-        size: '9.0',
-        color: 'Volt Green',
-        price: 189.00,
-        rating: 4,
-        image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCHMZknoZRs2WowTcCOqzTvQDMzLZ8ItmAP-mYDHzeTTnHxwIDD_z6Z9Ry6l6ULBESKvNcc-OSyh3w4vEyHhLixbl69HQ3e9ELV_HO1mZibN8S-UjAp0xXLlpfy_eGomnJzBbJWUbm-M17T9ux7_Nl4txhhfVLMiG_cwZKfLYEQjlqdeDhFH50Yf0cYK3qPXiTnilXBv1P4w0a_YO4cw7z-HU0AHAa933R1ABVEDuSVDbV9w5lBq8a5HHNE0vVOzBBVdBMlv6OlYOo',
-    },
-    {
-        id: 2,
-        name: 'Dunk Low Pro',
-        size: '9.0',
-        color: 'Sky Blue',
-        price: 120.00,
-        rating: 5,
-        image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuB0TXJky0zH0L78vzkAJwLmJ6BeC5jCYQgD_TxYx5btV5gazLM9rDctwoMuzb8oCm1h0jHZ3ARtGPhrIJCR7wx95zcdLGMqa-EemBePFLT0ogd58c2hhSnwVZvelH6nQtsbpf0irpV4KeCfeXiv6Qm47iyPGr-x8f96o-y5OmshU0iZZb2FqdZitKfvN0cymYBeq7eeWS9OJSKSWgGrBYZDJp1kAUVLwlCTpLXMQsSt58ptMRnO-ALPhoOjfmG4reowEkpvkTXwA20',
-    },
-];
+import { pageTransition, staggerContainer, staggerItem } from '../utils/animations';
+import { formatPrice } from '../utils/formatPrice';
+import { orderApi } from '../services/orderApi';
+import { productApi } from '../services/productApi';
+import { useAuth } from '../context/AuthContext';
+import { Order } from '../types';
 
 const EXPERIENCE_TAGS = ['Fast Shipping', 'Easy Checkout', 'Great Support', 'Packaging'];
 
 const PaymentResultsPage: React.FC = () => {
-    const [reviews, setReviews] = useState<Record<number, { rating: number; comment: string }>>({});
+    const { user } = useAuth();
+    const [reviews, setReviews] = useState<Record<string, { rating: number; comment: string }>>({});
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [showConfetti, setShowConfetti] = useState(true);
+    const [order, setOrder] = useState<Order | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [submittingReviews, setSubmittingReviews] = useState(false);
+    const [reviewSuccess, setReviewSuccess] = useState(false);
+    const [reviewError, setReviewError] = useState('');
+    const [reviewedProductIds, setReviewedProductIds] = useState<Set<string>>(new Set());
+    const [perItemStatus, setPerItemStatus] = useState<Record<number, { success?: boolean; error?: string }>>({});
 
-    const subtotal = PURCHASED_ITEMS.reduce((sum, item) => sum + item.price, 0);
-    const taxes = subtotal * 0.08;
-    const total = subtotal + taxes;
+    // Read VNPay return params from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const vnpayStatus = urlParams.get('status');
+    const vnpayOrderId = urlParams.get('orderId');
+    const isPaymentFailed = vnpayStatus === 'failed';
 
-    const orderNumber = '#SK-829104';
-    const deliveryDate = 'Friday, Dec 15';
-    const email = 'trantuanhiep.fpt@example.com';
+    // Fetch real order data
+    useEffect(() => {
+        if (!vnpayOrderId || isPaymentFailed) {
+            setLoading(false);
+            return;
+        }
+        let cancelled = false;
+        const fetchOrder = async () => {
+            try {
+                const res = await orderApi.getById(vnpayOrderId);
+                if (!cancelled) setOrder(res.data);
+            } catch {
+                if (!cancelled) setError('Không thể tải thông tin đơn hàng.');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+        fetchOrder();
+        return () => { cancelled = true; };
+    }, [vnpayOrderId, isPaymentFailed]);
 
     useEffect(() => {
-        // Hide confetti after animation
         const timer = setTimeout(() => setShowConfetti(false), 3000);
         return () => clearTimeout(timer);
     }, []);
 
-    const handleRating = (itemId: number, rating: number) => {
+    const getProductId = (item: any): string => {
+        const pid = typeof item.product_id === 'object'
+            ? (item.product_id._id || item.product_id.id || item.product_id)
+            : item.product_id;
+        return String(pid);
+    };
+
+    // Fetch existing reviews to detect already-reviewed products
+    useEffect(() => {
+        if (!order) return;
+        const checkExistingReviews = async () => {
+            const reviewed = new Set<string>();
+            for (const item of order.items) {
+                if (!item.product_id) continue;
+                const pid = getProductId(item);
+                try {
+                    const res = await productApi.getReviews(pid);
+                    const myReview = (res.data || []).find((r: any) =>
+                        r.user_id?._id === user?.id || r.user_id === user?.id
+                    );
+                    if (myReview) reviewed.add(pid);
+                } catch { /* ignore */ }
+            }
+            if (reviewed.size > 0) setReviewedProductIds(reviewed);
+        };
+        checkExistingReviews();
+    }, [order, user]);
+
+    // ── Failed payment screen ──
+    if (isPaymentFailed) {
+        return (
+            <motion.div
+                className="min-h-screen bg-background-light dark:bg-background-dark flex items-center justify-center px-6"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            >
+                <div className="text-center max-w-md">
+                    <motion.div
+                        className="size-24 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-red-500/30"
+                        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', duration: 0.6 }}
+                    >
+                        <span className="material-symbols-outlined text-white text-5xl">close</span>
+                    </motion.div>
+                    <h1 className="text-4xl font-black uppercase italic tracking-tighter mb-3">Thanh Toán Thất Bại</h1>
+                    <p className="text-sm opacity-60 mb-10">Giao dịch không thành công. Đơn hàng đã được hủy và tồn kho đã được hoàn lại.</p>
+                    <div className="flex gap-4 justify-center">
+                        <motion.button
+                            onClick={() => navigateWithTransition('/payment')}
+                            className="px-8 py-4 bg-charcoal dark:bg-primary text-white dark:text-charcoal rounded-2xl text-xs font-black uppercase tracking-widest"
+                            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                        >
+                            Thử lại
+                        </motion.button>
+                        <motion.button
+                            onClick={() => navigateWithTransition('/cart')}
+                            className="px-8 py-4 border-2 border-charcoal dark:border-white rounded-2xl text-xs font-black uppercase tracking-widest"
+                            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                        >
+                            Giỏ hàng
+                        </motion.button>
+                    </div>
+                </div>
+            </motion.div>
+        );
+    }
+
+    // ── Loading screen ──
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-background-light dark:bg-background-dark flex items-center justify-center">
+                <motion.div
+                    className="size-16 border-4 border-gray-200 dark:border-gray-700 border-t-primary rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                />
+            </div>
+        );
+    }
+
+    // ── Error screen ──
+    if (error || !order) {
+        return (
+            <div className="min-h-screen bg-background-light dark:bg-background-dark flex items-center justify-center px-6">
+                <div className="text-center max-w-md">
+                    <span className="material-symbols-outlined text-6xl text-red-400 mb-4 block">error</span>
+                    <h1 className="text-2xl font-black uppercase italic tracking-tighter mb-3">{error || 'Không tìm thấy đơn hàng'}</h1>
+                    <motion.button
+                        onClick={() => navigateWithTransition('/orders')}
+                        className="mt-6 px-8 py-4 bg-charcoal dark:bg-primary text-white dark:text-charcoal rounded-2xl text-xs font-black uppercase tracking-widest"
+                        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    >
+                        Xem đơn hàng
+                    </motion.button>
+                </div>
+            </div>
+        );
+    }
+
+    // ── Derived data from real order ──
+    const orderItems = order.items;
+    const subtotal = order.subtotal ?? orderItems.reduce((sum, item) => sum + (item.subtotal ?? item.price * item.quantity), 0);
+    const tax = order.tax ?? Math.round(subtotal * 0.08);
+    const discountAmount = order.discount_amount || 0;
+    const promoCode = order.promo_code || null;
+    const total = order.total;
+    const orderNumber = order.order_number;
+    const email = order.customer_email || user?.email || '';
+    const createdAt = order.createdAt ? new Date(order.createdAt) : new Date();
+    const estimatedDelivery = new Date(createdAt);
+    estimatedDelivery.setDate(estimatedDelivery.getDate() + 5);
+    const deliveryDate = estimatedDelivery.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+    const handleRating = (index: number, rating: number) => {
         setReviews(prev => ({
             ...prev,
-            [itemId]: { ...prev[itemId], rating }
+            [index]: { rating, comment: prev[index]?.comment || '' }
         }));
     };
 
-    const handleComment = (itemId: number, comment: string) => {
+    const handleComment = (index: number, comment: string) => {
         setReviews(prev => ({
             ...prev,
-            [itemId]: { ...prev[itemId], comment }
+            [index]: { rating: prev[index]?.rating || 0, comment }
         }));
     };
 
@@ -65,6 +187,208 @@ const PaymentResultsPage: React.FC = () => {
         setSelectedTags(prev =>
             prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
         );
+    };
+
+    const handleSubmitReviews = async () => {
+        type ReviewEntry = { rating: number; comment: string };
+        const reviewEntries = (Object.entries(reviews) as [string, ReviewEntry][]).filter(
+            ([, r]) => r.rating > 0 && r.comment?.trim()
+        );
+        if (reviewEntries.length === 0) {
+            setReviewError('Vui long chon sao va nhap nhan xet cho it nhat 1 san pham.');
+            return;
+        }
+        setSubmittingReviews(true);
+        setReviewError('');
+        setPerItemStatus({});
+        const newStatus: Record<number, { success?: boolean; error?: string }> = {};
+        let hasError = false;
+
+        for (const [indexStr, review] of reviewEntries) {
+            const idx = Number(indexStr);
+            const item = orderItems[idx];
+            if (!item?.product_id) continue;
+            const productId = getProductId(item);
+
+            if (reviewedProductIds.has(productId)) {
+                newStatus[idx] = { error: 'Ban da danh gia san pham nay roi' };
+                hasError = true;
+                continue;
+            }
+
+            try {
+                await productApi.addReview(productId, {
+                    rating: review.rating,
+                    comment: review.comment.trim(),
+                });
+                newStatus[idx] = { success: true };
+                setReviewedProductIds(prev => new Set(prev).add(productId));
+            } catch (err: any) {
+                const msg = err?.message || 'Khong the gui danh gia';
+                newStatus[idx] = { error: msg };
+                hasError = true;
+            }
+        }
+
+        setPerItemStatus(newStatus);
+        setSubmittingReviews(false);
+        if (!hasError) {
+            setReviewSuccess(true);
+        } else {
+            const errorMessages = Object.entries(newStatus)
+                .filter(([, s]) => s.error)
+                .map(([idx, s]) => `${orderItems[Number(idx)]?.product_name || 'Product'}: ${s.error}`);
+            setReviewError(errorMessages.join('. '));
+        }
+    };
+
+    // ── Download Invoice as PDF ──
+    const handleDownloadInvoice = () => {
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        let y = 20;
+
+        // Header
+        doc.setFontSize(24);
+        doc.setFont('helvetica', 'bold');
+        doc.text('KIX', 20, y);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('INVOICE', pageWidth - 20, y, { align: 'right' });
+        y += 15;
+
+        // Divider
+        doc.setDrawColor(200);
+        doc.line(20, y, pageWidth - 20, y);
+        y += 12;
+
+        // Order info
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Order Number:', 20, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(orderNumber, 70, y);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Date:', pageWidth / 2 + 10, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(createdAt.toLocaleDateString('vi-VN'), pageWidth / 2 + 30, y);
+        y += 7;
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('Payment:', 20, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(order.payment_method === 'vnpay' ? 'VNPay' : (order.payment_method || 'N/A'), 70, y);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Status:', pageWidth / 2 + 10, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(order.payment_status === 'success' ? 'Paid' : (order.payment_status || 'N/A'), pageWidth / 2 + 30, y);
+        y += 12;
+
+        // Customer info
+        doc.setFont('helvetica', 'bold');
+        doc.text('Customer:', 20, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(order.shipping_address?.recipient_name || '', 70, y);
+        y += 7;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Phone:', 20, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(order.shipping_address?.phone || order.customer_phone || '', 70, y);
+        y += 7;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Email:', 20, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(email, 70, y);
+        y += 7;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Address:', 20, y);
+        doc.setFont('helvetica', 'normal');
+        const addr = order.shipping_address;
+        const fullAddress = [addr?.address, addr?.ward, addr?.district, addr?.city].filter(Boolean).join(', ');
+        const addressLines = doc.splitTextToSize(fullAddress, pageWidth - 90);
+        doc.text(addressLines, 70, y);
+        y += addressLines.length * 6 + 10;
+
+        // Table header
+        doc.setFillColor(34, 34, 34);
+        doc.rect(20, y, pageWidth - 40, 10, 'F');
+        doc.setTextColor(255);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text('PRODUCT', 25, y + 7);
+        doc.text('SIZE', 95, y + 7);
+        doc.text('QTY', 115, y + 7);
+        doc.text('PRICE', 135, y + 7);
+        doc.text('SUBTOTAL', pageWidth - 25, y + 7, { align: 'right' });
+        y += 14;
+        doc.setTextColor(0);
+
+        // Table rows
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        orderItems.forEach((item, i) => {
+            if (y > 260) {
+                doc.addPage();
+                y = 20;
+            }
+            const bgColor = i % 2 === 0 ? 248 : 255;
+            doc.setFillColor(bgColor, bgColor, bgColor);
+            doc.rect(20, y - 4, pageWidth - 40, 10, 'F');
+
+            const name = item.product_name || 'Product';
+            const truncatedName = name.length > 30 ? name.substring(0, 27) + '...' : name;
+            doc.text(truncatedName, 25, y + 2);
+            doc.text(item.size != null ? String(item.size) : '-', 95, y + 2);
+            doc.text(String(item.quantity), 115, y + 2);
+            doc.text(formatPrice(item.price), 135, y + 2);
+            doc.text(formatPrice(item.subtotal ?? item.price * item.quantity), pageWidth - 25, y + 2, { align: 'right' });
+            y += 10;
+        });
+
+        y += 5;
+        doc.setDrawColor(200);
+        doc.line(pageWidth / 2 + 20, y, pageWidth - 20, y);
+        y += 10;
+
+        // Totals
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Subtotal:', pageWidth / 2 + 25, y);
+        doc.text(formatPrice(subtotal), pageWidth - 25, y, { align: 'right' });
+        y += 7;
+        doc.text('Shipping:', pageWidth / 2 + 25, y);
+        doc.text('Free', pageWidth - 25, y, { align: 'right' });
+        y += 7;
+        doc.text('Tax (8%):', pageWidth / 2 + 25, y);
+        doc.text(formatPrice(tax), pageWidth - 25, y, { align: 'right' });
+        y += 7;
+
+        if (discountAmount > 0) {
+            doc.setTextColor(0, 128, 0);
+            doc.text(`Discount${promoCode ? ` (${promoCode})` : ''}:`, pageWidth / 2 + 25, y);
+            doc.text(`-${formatPrice(discountAmount)}`, pageWidth - 25, y, { align: 'right' });
+            doc.setTextColor(0);
+            y += 7;
+        }
+        y += 3;
+
+        doc.setDrawColor(200);
+        doc.line(pageWidth / 2 + 20, y, pageWidth - 20, y);
+        y += 8;
+
+        doc.setFontSize(13);
+        doc.setFont('helvetica', 'bold');
+        doc.text('TOTAL:', pageWidth / 2 + 25, y);
+        doc.text(formatPrice(total), pageWidth - 25, y, { align: 'right' });
+        y += 20;
+
+        // Footer
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(130);
+        doc.text('Thank you for shopping with KIX!', pageWidth / 2, y, { align: 'center' });
+
+        doc.save(`KIX-Invoice-${orderNumber}.pdf`);
     };
 
     return (
@@ -121,8 +445,8 @@ const PaymentResultsPage: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-6">
                     <a
-                        href="/sneakers"
-                        onClick={(e) => { e.preventDefault(); navigateWithTransition('/sneakers'); }}
+                        href="/orders"
+                        onClick={(e) => { e.preventDefault(); navigateWithTransition('/orders'); }}
                         className="text-[10px] font-black uppercase tracking-widest hover:text-primary transition-colors italic"
                     >
                         My Orders
@@ -211,6 +535,7 @@ const PaymentResultsPage: React.FC = () => {
                                 <p className="text-xs font-black uppercase tracking-widest">Standard Express</p>
                             </div>
                             <motion.button
+                                onClick={() => navigateWithTransition('/orders')}
                                 className="bg-charcoal dark:bg-primary text-white dark:text-charcoal px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-charcoal/80 dark:hover:bg-white transition-all"
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
@@ -239,61 +564,95 @@ const PaymentResultsPage: React.FC = () => {
                             </h2>
 
                             <div className="space-y-10">
-                                {PURCHASED_ITEMS.map((item, index) => (
+                                {orderItems.map((item, index) => {
+                                    const productId = item.product_id ? getProductId(item) : '';
+                                    const alreadyReviewed = reviewedProductIds.has(productId);
+                                    const itemStatus = perItemStatus[index];
+                                    const productImage = item.product_image || null;
+
+                                    return (
                                     <motion.div
-                                        key={item.id}
-                                        className={`flex flex-col md:flex-row gap-8 ${index < PURCHASED_ITEMS.length - 1 ? 'pb-10 border-b border-gray-100 dark:border-border-dark' : ''}`}
+                                        key={index}
+                                        className={`flex flex-col md:flex-row gap-8 ${index < orderItems.length - 1 ? 'pb-10 border-b border-gray-100 dark:border-border-dark' : ''}`}
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: index * 0.1 }}
                                     >
-                                        <div className="w-32 h-32 bg-background-alt dark:bg-charcoal rounded-2xl flex-shrink-0 p-4">
-                                            <img
-                                                alt={item.name}
-                                                className="w-full h-full object-contain -rotate-12"
-                                                src={item.image}
-                                            />
+                                        <div className="w-32 h-32 bg-background-alt dark:bg-charcoal rounded-2xl flex-shrink-0 flex items-center justify-center overflow-hidden">
+                                            {productImage ? (
+                                                <img src={productImage} alt={item.product_name || 'Product'} className="w-full h-full object-contain p-2" />
+                                            ) : (
+                                                <span className="material-symbols-outlined text-5xl text-charcoal/20 dark:text-white/20">shoe</span>
+                                            )}
                                         </div>
                                         <div className="flex-1 space-y-4">
-                                            <div>
-                                                <h4 className="text-lg font-black uppercase italic tracking-tight">{item.name}</h4>
-                                                <p className="text-[10px] font-bold text-charcoal/40 dark:text-white/40 uppercase tracking-widest">
-                                                    Size {item.size} • {item.color}
-                                                </p>
+                                            <div className="flex items-start justify-between">
+                                                <div>
+                                                    <h4 className="text-lg font-black uppercase italic tracking-tight">{item.product_name || 'Product'}</h4>
+                                                    <p className="text-[10px] font-bold text-charcoal/40 dark:text-white/40 uppercase tracking-widest">
+                                                        {item.size != null && `Size ${item.size}`}{item.size != null && item.color && ' • '}{item.color || ''}
+                                                        {item.quantity > 1 && ` • Qty: ${item.quantity}`}
+                                                    </p>
+                                                </div>
+                                                {(alreadyReviewed || itemStatus?.success) && (
+                                                    <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-green-500 bg-green-50 dark:bg-green-500/10 px-3 py-1 rounded-full">
+                                                        <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                                                        Da danh gia
+                                                    </span>
+                                                )}
+                                                {itemStatus?.error && !itemStatus?.success && (
+                                                    <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-500 bg-red-50 dark:bg-red-500/10 px-3 py-1 rounded-full">
+                                                        <span className="material-symbols-outlined text-sm">error</span>
+                                                        Loi
+                                                    </span>
+                                                )}
                                             </div>
 
-                                            {/* Star Rating */}
-                                            <div className="flex gap-1">
-                                                {[1, 2, 3, 4, 5].map((star) => (
-                                                    <motion.button
-                                                        key={star}
-                                                        onClick={() => handleRating(item.id, star)}
-                                                        whileHover={{ scale: 1.2 }}
-                                                        whileTap={{ scale: 0.9 }}
-                                                    >
-                                                        <span
-                                                            className={`material-symbols-outlined cursor-pointer transition-colors ${star <= (reviews[item.id]?.rating || item.rating)
-                                                                ? 'text-primary'
-                                                                : 'text-gray-200 dark:text-gray-600 hover:text-primary'
-                                                                }`}
-                                                            style={{ fontVariationSettings: star <= (reviews[item.id]?.rating || item.rating) ? "'FILL' 1" : "'FILL' 0" }}
-                                                        >
-                                                            star
-                                                        </span>
-                                                    </motion.button>
-                                                ))}
-                                            </div>
+                                            {alreadyReviewed && !itemStatus ? (
+                                                <p className="text-xs text-charcoal/50 dark:text-white/50 italic">Ban da danh gia san pham nay roi.</p>
+                                            ) : itemStatus?.success ? (
+                                                <p className="text-xs text-green-500 italic">Cam on ban da danh gia!</p>
+                                            ) : (
+                                                <>
+                                                    {/* Star Rating */}
+                                                    <div className="flex gap-1">
+                                                        {[1, 2, 3, 4, 5].map((star) => (
+                                                            <motion.button
+                                                                key={star}
+                                                                onClick={() => handleRating(index, star)}
+                                                                whileHover={{ scale: 1.2 }}
+                                                                whileTap={{ scale: 0.9 }}
+                                                            >
+                                                                <span
+                                                                    className={`material-symbols-outlined cursor-pointer transition-colors ${star <= (reviews[index]?.rating || 0)
+                                                                        ? 'text-primary'
+                                                                        : 'text-gray-200 dark:text-gray-600 hover:text-primary'
+                                                                        }`}
+                                                                    style={{ fontVariationSettings: star <= (reviews[index]?.rating || 0) ? "'FILL' 1" : "'FILL' 0" }}
+                                                                >
+                                                                    star
+                                                                </span>
+                                                            </motion.button>
+                                                        ))}
+                                                    </div>
 
-                                            <textarea
-                                                className="w-full bg-background-alt dark:bg-charcoal border-none rounded-xl p-4 text-xs font-bold placeholder:text-charcoal/20 dark:placeholder:text-white/20 focus:ring-2 focus:ring-primary"
-                                                placeholder="TELL US ABOUT THE FIT..."
-                                                rows={2}
-                                                value={reviews[item.id]?.comment || ''}
-                                                onChange={(e) => handleComment(item.id, e.target.value)}
-                                            />
+                                                    <textarea
+                                                        className="w-full bg-background-alt dark:bg-charcoal border-none rounded-xl p-4 text-xs font-bold placeholder:text-charcoal/20 dark:placeholder:text-white/20 focus:ring-2 focus:ring-primary"
+                                                        placeholder="TELL US ABOUT THE FIT..."
+                                                        rows={2}
+                                                        value={reviews[index]?.comment || ''}
+                                                        onChange={(e) => handleComment(index, e.target.value)}
+                                                    />
+
+                                                    {itemStatus?.error && (
+                                                        <p className="text-red-400 text-[10px] font-bold">{itemStatus.error}</p>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
                                     </motion.div>
-                                ))}
+                                    );
+                                })}
 
                                 {/* Experience Tags */}
                                 <motion.div
@@ -317,13 +676,31 @@ const PaymentResultsPage: React.FC = () => {
                                             </motion.button>
                                         ))}
                                     </div>
-                                    <motion.button
-                                        className="w-full py-4 bg-primary dark:bg-charcoal text-charcoal dark:text-primary text-xs font-black uppercase tracking-[0.3em] rounded-2xl hover:bg-white dark:hover:bg-white hover:text-charcoal transition-all shadow-xl shadow-primary/10"
-                                        whileHover={{ scale: 1.02 }}
-                                        whileTap={{ scale: 0.98 }}
-                                    >
-                                        Submit Reviews
-                                    </motion.button>
+                                    {(() => {
+                                        const allReviewed = orderItems.length > 0 && orderItems.every(item => {
+                                            const pid = item.product_id ? getProductId(item) : '';
+                                            return reviewedProductIds.has(pid);
+                                        });
+                                        const isDisabled = submittingReviews || reviewSuccess || allReviewed;
+
+                                        return (
+                                            <motion.button
+                                                onClick={handleSubmitReviews}
+                                                disabled={isDisabled}
+                                                className="w-full py-4 bg-primary dark:bg-charcoal text-charcoal dark:text-primary text-xs font-black uppercase tracking-[0.3em] rounded-2xl hover:bg-white dark:hover:bg-white hover:text-charcoal transition-all shadow-xl shadow-primary/10 disabled:opacity-50"
+                                                whileHover={{ scale: isDisabled ? 1 : 1.02 }}
+                                                whileTap={{ scale: isDisabled ? 1 : 0.98 }}
+                                            >
+                                                {submittingReviews ? 'Dang gui...' : (reviewSuccess || allReviewed) ? 'Da gui thanh cong!' : 'Submit Reviews'}
+                                            </motion.button>
+                                        );
+                                    })()}
+                                    {reviewError && (
+                                        <p className="text-red-400 text-[10px] font-bold mt-2 text-center">{reviewError}</p>
+                                    )}
+                                    {reviewSuccess && (
+                                        <p className="text-green-400 text-[10px] font-bold mt-2 text-center uppercase tracking-widest">Cam on ban da danh gia!</p>
+                                    )}
                                 </motion.div>
                             </div>
                         </motion.div>
@@ -339,32 +716,51 @@ const PaymentResultsPage: React.FC = () => {
                         <div className="bg-white dark:bg-card-dark border-2 border-gray-100 dark:border-border-dark p-8 rounded-[2.5rem] sticky top-24">
                             <h3 className="text-xl font-black uppercase italic tracking-tighter mb-8 flex justify-between items-center">
                                 Purchase Details
-                                <span className="text-[10px] bg-charcoal dark:bg-primary text-primary dark:text-charcoal px-2 py-0.5 rounded italic">{PURCHASED_ITEMS.length} Items</span>
+                                <span className="text-[10px] bg-charcoal dark:bg-primary text-primary dark:text-charcoal px-2 py-0.5 rounded italic">{orderItems.length} Items</span>
                             </h3>
 
+                            {/* Items list */}
+                            <div className="space-y-3 mb-6">
+                                {orderItems.map((item, i) => (
+                                    <div key={i} className="flex justify-between text-xs">
+                                        <span className="font-bold truncate max-w-[200px]">
+                                            {item.product_name || 'Product'} {item.quantity > 1 ? `x${item.quantity}` : ''}
+                                        </span>
+                                        <span className="font-black">{formatPrice(item.subtotal ?? item.price * item.quantity)}</span>
+                                    </div>
+                                ))}
+                            </div>
+
                             {/* Price Breakdown */}
-                            <div className="space-y-4 mb-8">
+                            <div className="space-y-4 mb-8 border-t border-gray-100 dark:border-border-dark pt-6">
                                 <div className="flex justify-between text-xs font-black uppercase tracking-widest text-charcoal/40 dark:text-white/40">
                                     <span>Subtotal</span>
-                                    <span className="text-charcoal dark:text-white">${subtotal.toFixed(2)}</span>
+                                    <span className="text-charcoal dark:text-white">{formatPrice(subtotal)}</span>
                                 </div>
                                 <div className="flex justify-between text-xs font-black uppercase tracking-widest text-charcoal/40 dark:text-white/40">
                                     <span>Shipping</span>
                                     <span className="text-primary italic">Free</span>
                                 </div>
                                 <div className="flex justify-between text-xs font-black uppercase tracking-widest text-charcoal/40 dark:text-white/40">
-                                    <span>Taxes</span>
-                                    <span className="text-charcoal dark:text-white">${taxes.toFixed(2)}</span>
+                                    <span>Tax (8%)</span>
+                                    <span className="text-charcoal dark:text-white">{formatPrice(tax)}</span>
                                 </div>
+                                {discountAmount > 0 && (
+                                    <div className="flex justify-between text-xs font-black uppercase tracking-widest text-green-500">
+                                        <span>Discount {promoCode && `(${promoCode})`}</span>
+                                        <span>-{formatPrice(discountAmount)}</span>
+                                    </div>
+                                )}
                                 <div className="pt-4 border-t border-gray-100 dark:border-border-dark flex justify-between items-end">
                                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Total Paid</span>
-                                    <span className="text-3xl font-black italic tracking-tighter text-charcoal dark:text-white">${total.toFixed(2)}</span>
+                                    <span className="text-3xl font-black italic tracking-tighter text-charcoal dark:text-white">{formatPrice(total)}</span>
                                 </div>
                             </div>
 
                             {/* Action Buttons */}
                             <div className="space-y-4">
                                 <motion.button
+                                    onClick={handleDownloadInvoice}
                                     className="w-full py-4 border-2 border-charcoal dark:border-white text-charcoal dark:text-white text-xs font-black uppercase tracking-[0.2em] rounded-xl hover:bg-charcoal hover:text-white dark:hover:bg-white dark:hover:text-charcoal transition-all flex items-center justify-center gap-2"
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}

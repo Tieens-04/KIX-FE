@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Product } from '../types';
+import { formatPrice } from '../utils/formatPrice';
 
 interface ProductCardProps {
   product: Product;
@@ -54,8 +55,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
         <p className="text-xs font-bold opacity-40 mb-4 uppercase tracking-widest">{product.category} • {product.colorway}</p>
         <div className="flex justify-between items-center">
           <div className="flex flex-col">
-            <p className="font-black text-primary text-2xl">${product.price}</p>
-            {product.oldPrice && <p className="text-[10px] opacity-30 line-through">${product.oldPrice}</p>}
+            <p className="font-black text-primary text-2xl">{formatPrice(product.price)}</p>
+            {product.oldPrice && <p className="text-[10px] opacity-30 line-through">{formatPrice(product.oldPrice)}</p>}
           </div>
 
           {product.isSoldOut ? (

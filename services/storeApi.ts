@@ -1,4 +1,4 @@
-import api, { buildQuery } from './api';
+import api, { buildQuery, apiUpload, apiUploadPut } from './api';
 import { Store } from '../types';
 
 export const storeApi = {
@@ -11,8 +11,14 @@ export const storeApi = {
     create: (data: Partial<Store>) =>
         api<Store>('/stores', { method: 'POST', body: data }),
 
+    createWithImage: (formData: FormData) =>
+        apiUpload<Store>('/stores', formData),
+
     update: (id: string, data: Partial<Store>) =>
         api<Store>(`/stores/${id}`, { method: 'PUT', body: data }),
+
+    updateWithImage: (id: string, formData: FormData) =>
+        apiUploadPut<Store>(`/stores/${id}`, formData),
 
     delete: (id: string) =>
         api(`/stores/${id}`, { method: 'DELETE' }),

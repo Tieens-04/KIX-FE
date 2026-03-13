@@ -6,6 +6,7 @@ import { pageTransition, fadeInUp, staggerContainer, staggerItem } from '../util
 import { useAuth } from '../context/AuthContext';
 import { orderApi } from '../services/orderApi';
 import { Order } from '../types';
+import { formatPrice } from '../utils/formatPrice';
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string; icon: string }> = {
     pending: { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: 'schedule' },
@@ -149,8 +150,8 @@ const OrdersPage: React.FC = () => {
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="text-sm font-black text-primary">${(item.subtotal || item.price * item.quantity).toFixed(2)}</p>
-                                                    <p className="text-[9px] font-bold opacity-30">${item.price}/đôi</p>
+                                                    <p className="text-sm font-black text-primary">{formatPrice(item.subtotal || item.price * item.quantity)}</p>
+                                                    <p className="text-[9px] font-bold opacity-30">{formatPrice(item.price)}/đôi</p>
                                                 </div>
                                             </div>
                                         ))}
@@ -173,7 +174,7 @@ const OrdersPage: React.FC = () => {
                                         </div>
                                         <div className="text-right">
                                             <p className="text-[10px] font-black uppercase tracking-widest opacity-40">Tổng tiền</p>
-                                            <p className="text-2xl font-black text-primary italic">${order.total?.toFixed(2)}</p>
+                                            <p className="text-2xl font-black text-primary italic">{formatPrice(order.total || 0)}</p>
                                         </div>
                                     </div>
                                 </motion.div>

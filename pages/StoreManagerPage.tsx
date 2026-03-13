@@ -7,6 +7,7 @@ import { storeApi } from '../services/storeApi';
 import { inventoryApi } from '../services/inventoryApi';
 import { orderApi } from '../services/orderApi';
 import { Store, Order } from '../types';
+import { formatPrice } from '../utils/formatPrice';
 
 // ======= MAIN STORE MANAGER PAGE =======
 const StoreManagerPage: React.FC = () => {

@@ -179,7 +179,7 @@ const SneakersPage: React.FC = () => {
         showToast(`'${product.name}' added to your box!`);
     };
 
-    const formatPrice = (val: number) => val.toLocaleString('en-US') + 'đ';
+    const formatPrice = (val: number) => new Intl.NumberFormat('vi-VN').format(val) + ' VND';
 
     // Active filter count for badge
     const activeFilterCount = (selectedColor ? 1 : 0) + (selectedSize ? 1 : 0) + (isPriceFiltered ? 1 : 0);

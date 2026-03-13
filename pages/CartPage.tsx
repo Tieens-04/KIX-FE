@@ -5,7 +5,10 @@ import Footer from '../components/Footer';
 import { navigateWithTransition } from '../components/PageTransition';
 import { fadeInUp, staggerContainer, staggerItem, pageTransition } from '../utils/animations';
 import { cartApi } from '../services/cartApi';
+import { promotionApi } from '../services/promotionApi';
 import { useAuth } from '../context/AuthContext';
+import { formatPrice } from '../utils/formatPrice';
+import { PromoValidationResult } from '../types';
 
 // Cart items data
 const CART_ITEMS = [
@@ -16,7 +19,7 @@ const CART_ITEMS = [
         color: 'Volt Green',
         size: 'US 9.0',
         quantity: 1,
-        price: 189.00,
+        price: 4725000,
         image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCHMZknoZRs2WowTcCOqzTvQDMzLZ8ItmAP-mYDHzeTTnHxwIDD_z6Z9Ry6l6ULBESKvNcc-OSyh3w4vEyHhLixbl69HQ3e9ELV_HO1mZibN8S-UjAp0xXLlpfy_eGomnJzBbJWUbm-M17T9ux7_Nl4txhhfVLMiG_cwZKfLYEQjlqdeDhFH50Yf0cYK3qPXiTnilXBv1P4w0a_YO4cw7z-HU0AHAa933R1ABVEDuSVDbV9w5lBq8a5HHNE0vVOzBBVdBMlv6OlYOo',
     },
     {
@@ -26,7 +29,7 @@ const CART_ITEMS = [
         color: 'Sky Blue',
         size: 'US 10.5',
         quantity: 2,
-        price: 120.00,
+        price: 3000000,
         image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuB0TXJky0zH0L78vzkAJwLmJ6BeC5jCYQgD_TxYx5btV5gazLM9rDctwoMuzb8oCm1h0jHZ3ARtGPhrIJCR7wx95zcdLGMqa-EemBePFLT0ogd58c2hhSnwVZvelH6nQtsbpf0irpV4KeCfeXiv6Qm47iyPGr-x8f96o-y5OmshU0iZZb2FqdZitKfvN0cymYBeq7eeWS9OJSKSWgGrBYZDJp1kAUVLwlCTpLXMQsSt58ptMRnO-ALPhoOjfmG4reowEkpvkTXwA20',
     },
     {
@@ -36,7 +39,7 @@ const CART_ITEMS = [
         color: 'Triple White',
         size: 'US 9.0',
         quantity: 1,
-        price: 144.00,
+        price: 3600000,
         image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD9t3YIuCIONp__ieTj-01FjNI4qKViScLPpye53fZMZ8z2gAnpA3WL2ug7H1JeHuUvz1V-zz2oECkFjwU_ztXWpJuezR1wS-8PjdpnmSCqPUqdrrISBqv3WiWgHNNyQqMm_tr-OROEVU5xiQmsP7sJRwlXuVUuWlPbozk5w6JTi9kGZV4A-QrDOou1PwpmBd31giLRbn9DmJdjdnTxtmcwmoh7iKYQMqrZCWAAp87PA9b9tXEdWVntZ6aJdS5qGzxmh1xY_A1HK9w',
     },
     {
@@ -46,7 +49,7 @@ const CART_ITEMS = [
         color: 'Grey Mist',
         size: 'US 11.0',
         quantity: 1,
-        price: 210.00,
+        price: 5250000,
         image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuB0TXJky0zH0L78vzkAJwLmJ6BeC5jCYQgD_TxYx5btV5gazLM9rDctwoMuzb8oCm1h0jHZ3ARtGPhrIJCR7wx95zcdLGMqa-EemBePFLT0ogd58c2hhSnwVZvelH6nQtsbpf0irpV4KeCfeXiv6Qm47iyPGr-x8f96o-y5OmshU0iZZb2FqdZitKfvN0cymYBeq7eeWS9OJSKSWgGrBYZDJp1kAUVLwlCTpLXMQsSt58ptMRnO-ALPhoOjfmG4reowEkpvkTXwA20',
     },
     {
@@ -56,7 +59,7 @@ const CART_ITEMS = [
         color: 'Obsidian',
         size: 'US 8.5',
         quantity: 1,
-        price: 165.00,
+        price: 4125000,
         image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCHMZknoZRs2WowTcCOqzTvQDMzLZ8ItmAP-mYDHzeTTnHxwIDD_z6Z9Ry6l6ULBESKvNcc-OSyh3w4vEyHhLixbl69HQ3e9ELV_HO1mZibN8S-UjAp0xXLlpfy_eGomnJzBbJWUbm-M17T9ux7_Nl4txhhfVLMiG_cwZKfLYEQjlqdeDhFH50Yf0cYK3qPXiTnilXBv1P4w0a_YO4cw7z-HU0AHAa933R1ABVEDuSVDbV9w5lBq8a5HHNE0vVOzBBVdBMlv6OlYOo',
     },
     {
@@ -66,7 +69,7 @@ const CART_ITEMS = [
         color: 'Crimson Red',
         size: 'US 9.0',
         quantity: 1,
-        price: 110.00,
+        price: 2750000,
         image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCHMZknoZRs2WowTcCOqzTvQDMzLZ8ItmAP-mYDHzeTTnHxwIDD_z6Z9Ry6l6ULBESKvNcc-OSyh3w4vEyHhLixbl69HQ3e9ELV_HO1mZibN8S-UjAp0xXLlpfy_eGomnJzBbJWUbm-M17T9ux7_Nl4txhhfVLMiG_cwZKfLYEQjlqdeDhFH50Yf0cYK3qPXiTnilXBv1P4w0a_YO4cw7z-HU0AHAa933R1ABVEDuSVDbV9w5lBq8a5HHNE0vVOzBBVdBMlv6OlYOo',
     },
     {
@@ -76,7 +79,7 @@ const CART_ITEMS = [
         color: 'White Leather',
         size: 'US 10.0',
         quantity: 1,
-        price: 105.00,
+        price: 2625000,
         image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD9t3YIuCIONp__ieTj-01FjNI4qKViScLPpye53fZMZ8z2gAnpA3WL2ug7H1JeHuUvz1V-zz2oECkFjwU_ztXWpJuezR1wS-8PjdpnmSCqPUqdrrISBqv3WiWgHNNyQqMm_tr-OROEVU5xiQmsP7sJRwlXuVUuWlPbozk5w6JTi9kGZV4A-QrDOou1PwpmBd31giLRbn9DmJdjdnTxtmcwmoh7iKYQMqrZCWAAp87PA9b9tXEdWVntZ6aJdS5qGzxmh1xY_A1HK9w',
     },
 ];
@@ -98,6 +101,9 @@ const CartPage: React.FC = () => {
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [cartItems, setCartItems] = useState<CartItemDisplay[]>([]);
     const [promoCode, setPromoCode] = useState('');
+    const [promoResult, setPromoResult] = useState<PromoValidationResult | null>(null);
+    const [promoError, setPromoError] = useState('');
+    const [promoLoading, setPromoLoading] = useState(false);
     const [toast, setToast] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState('');
@@ -189,6 +195,29 @@ const CartPage: React.FC = () => {
 
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
     const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const discountAmount = promoResult?.discount_amount || 0;
+
+    const applyPromoCode = async () => {
+        if (!promoCode.trim()) return;
+        setPromoLoading(true);
+        setPromoError('');
+        setPromoResult(null);
+        try {
+            const res = await promotionApi.validate(promoCode.trim());
+            setPromoResult(res.data);
+        } catch (err: any) {
+            setPromoError(err?.message || 'Invalid promo code');
+        }
+        setPromoLoading(false);
+    };
+
+    const removePromoCode = () => {
+        setPromoResult(null);
+        setPromoCode('');
+        setPromoError('');
+        sessionStorage.removeItem('kix_promo_code');
+        sessionStorage.removeItem('kix_promo_discount');
+    };
 
     return (
         <motion.div
@@ -329,8 +358,8 @@ const CartPage: React.FC = () => {
                                                     </motion.button>
                                                 </div>
                                             </td>
-                                            <td className="py-6 px-4 text-right text-sm font-black">${item.price.toFixed(2)}</td>
-                                            <td className="py-6 pl-4 text-right text-sm font-black italic">${(item.price * item.quantity).toFixed(2)}</td>
+                                            <td className="py-6 px-4 text-right text-sm font-black">{formatPrice(item.price)}</td>
+                                            <td className="py-6 pl-4 text-right text-sm font-black italic">{formatPrice(item.price * item.quantity)}</td>
                                         </motion.tr>
                                     ))}
                                 </AnimatePresence>
@@ -372,7 +401,7 @@ const CartPage: React.FC = () => {
                             <div className="space-y-4 mb-8 relative z-10">
                                 <div className="flex justify-between items-center text-xs font-bold text-white/60 dark:text-charcoal/60 uppercase tracking-widest">
                                     <span>Subtotal ({totalItems} items)</span>
-                                    <span className="text-white dark:text-charcoal">${subtotal.toFixed(2)}</span>
+                                    <span className="text-white dark:text-charcoal">{formatPrice(subtotal)}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-xs font-bold text-white/60 dark:text-charcoal/60 uppercase tracking-widest">
                                     <span>Shipping</span>
@@ -380,39 +409,84 @@ const CartPage: React.FC = () => {
                                 </div>
                                 <div className="flex justify-between items-center text-xs font-bold text-white/60 dark:text-charcoal/60 uppercase tracking-widest">
                                     <span>Tax</span>
-                                    <span className="text-white dark:text-charcoal">$0.00</span>
+                                    <span className="text-white dark:text-charcoal">0 VND</span>
                                 </div>
+                                {discountAmount > 0 && (
+                                    <div className="flex justify-between items-center text-xs font-bold text-green-400 uppercase tracking-widest">
+                                        <span>Discount</span>
+                                        <span>-{formatPrice(discountAmount)}</span>
+                                    </div>
+                                )}
                                 <div className="pt-4 border-t border-white/10 dark:border-charcoal/10 flex justify-between items-end">
                                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Estimated Total</span>
                                     <motion.span
                                         className="text-4xl font-black text-primary dark:text-charcoal italic leading-none"
-                                        key={subtotal}
+                                        key={subtotal - discountAmount}
                                         initial={{ scale: 1.2 }}
                                         animate={{ scale: 1 }}
                                     >
-                                        ${subtotal.toFixed(2)}
+                                        {formatPrice(subtotal - discountAmount)}
                                     </motion.span>
                                 </div>
                             </div>
 
                             <div className="space-y-4 relative z-10">
                                 {/* Promo Code */}
-                                <div className="relative">
-                                    <input
-                                        className="w-full bg-white/5 dark:bg-charcoal/10 border-2 border-white/10 dark:border-charcoal/20 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest focus:ring-primary focus:border-primary placeholder:text-white/20 dark:placeholder:text-charcoal/30"
-                                        placeholder="PROMO CODE"
-                                        type="text"
-                                        value={promoCode}
-                                        onChange={(e) => setPromoCode(e.target.value)}
-                                    />
-                                    <button className="absolute right-2 top-1/2 -translate-y-1/2 text-primary dark:text-charcoal font-black text-[10px] uppercase tracking-widest px-2 py-1 bg-white/10 dark:bg-charcoal/10 rounded hover:bg-white/20 dark:hover:bg-charcoal/20 transition-colors">
-                                        Apply
-                                    </button>
-                                </div>
+                                {promoResult ? (
+                                    <div className="bg-green-500/10 border-2 border-green-400/30 rounded-xl px-4 py-3 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-green-400">
+                                                {promoResult.code} applied
+                                            </p>
+                                            <p className="text-[9px] font-bold text-white/50 dark:text-charcoal/50">
+                                                -{formatPrice(promoResult.discount_amount)}
+                                                {promoResult.description && ` • ${promoResult.description}`}
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={removePromoCode}
+                                            className="text-red-400 hover:text-red-300 transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">close</span>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <div className="relative">
+                                            <input
+                                                className="w-full bg-white/5 dark:bg-charcoal/10 border-2 border-white/10 dark:border-charcoal/20 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest focus:ring-primary focus:border-primary placeholder:text-white/20 dark:placeholder:text-charcoal/30"
+                                                placeholder="PROMO CODE"
+                                                type="text"
+                                                value={promoCode}
+                                                onChange={(e) => { setPromoCode(e.target.value); setPromoError(''); }}
+                                                onKeyDown={(e) => e.key === 'Enter' && applyPromoCode()}
+                                            />
+                                            <button
+                                                onClick={applyPromoCode}
+                                                disabled={promoLoading || !promoCode.trim()}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-primary dark:text-charcoal font-black text-[10px] uppercase tracking-widest px-2 py-1 bg-white/10 dark:bg-charcoal/10 rounded hover:bg-white/20 dark:hover:bg-charcoal/20 transition-colors disabled:opacity-40"
+                                            >
+                                                {promoLoading ? '...' : 'Apply'}
+                                            </button>
+                                        </div>
+                                        {promoError && (
+                                            <p className="text-red-400 text-[10px] font-bold mt-1 uppercase tracking-widest">{promoError}</p>
+                                        )}
+                                    </div>
+                                )}
 
                                 {/* Checkout Button */}
                                 <motion.button
-                                    onClick={() => navigateWithTransition('/payment')}
+                                    onClick={() => {
+                                        if (promoResult) {
+                                            sessionStorage.setItem('kix_promo_code', promoResult.code);
+                                            sessionStorage.setItem('kix_promo_discount', String(promoResult.discount_amount));
+                                        } else {
+                                            sessionStorage.removeItem('kix_promo_code');
+                                            sessionStorage.removeItem('kix_promo_discount');
+                                        }
+                                        navigateWithTransition('/payment');
+                                    }}
                                     className="w-full py-5 bg-primary dark:bg-charcoal text-charcoal dark:text-white text-sm font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white dark:hover:bg-white hover:text-charcoal transition-all shadow-[0_10px_30px_rgba(37,244,37,0.3)] flex items-center justify-center gap-3"
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
@@ -440,7 +514,7 @@ const CartPage: React.FC = () => {
                                         <div>
                                             <p className="text-[10px] font-black uppercase tracking-widest mb-1">AI Recommendation</p>
                                             <p className="text-[9px] font-bold text-white/50 dark:text-charcoal/50 leading-relaxed uppercase">
-                                                Add the "Sneaker Care Kit" for $15 to maintain your selection. (AI detected 4 leather pairs)
+                                                Add the "Sneaker Care Kit" for 375.000 VND to maintain your selection. (AI detected 4 leather pairs)
                                             </p>
                                             <button className="mt-2 text-[9px] font-black text-primary dark:text-charcoal uppercase underline hover:opacity-70 transition-opacity">
                                                 Add to cart

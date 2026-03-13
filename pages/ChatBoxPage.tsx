@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Header from '../components/Header';
 import { fadeInUp, fadeInLeft, fadeInRight, staggerContainer, staggerItem, pageTransition } from '../utils/animations';
+import { formatPrice } from '../utils/formatPrice';
 
 // Fake chat data
 const INITIAL_MESSAGES = [
@@ -31,7 +32,7 @@ const INITIAL_MESSAGES = [
                     id: 1,
                     name: 'VaporMax Flyknit',
                     color: 'Volt Green',
-                    price: 189,
+                    price: 4725000,
                     image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCHMZknoZRs2WowTcCOqzTvQDMzLZ8ItmAP-mYDHzeTTnHxwIDD_z6Z9Ry6l6ULBESKvNcc-OSyh3w4vEyHhLixbl69HQ3e9ELV_HO1mZibN8S-UjAp0xXLlpfy_eGomnJzBbJWUbm-M17T9ux7_Nl4txhhfVLMiG_cwZKfLYEQjlqdeDhFH50Yf0cYK3qPXiTnilXBv1P4w0a_YO4cw7z-HU0AHAa933R1ABVEDuSVDbV9w5lBq8a5HHNE0vVOzBBVdBMlv6OlYOo',
                     badge: 'AI Recommended',
                 },
@@ -39,7 +40,7 @@ const INITIAL_MESSAGES = [
                     id: 2,
                     name: 'Dunk Low Pro',
                     color: 'Sky Blue',
-                    price: 120,
+                    price: 3000000,
                     image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuB0TXJky0zH0L78vzkAJwLmJ6BeC5jCYQgD_TxYx5btV5gazLM9rDctwoMuzb8oCm1h0jHZ3ARtGPhrIJCR7wx95zcdLGMqa-EemBePFLT0ogd58c2hhSnwVZvelH6nQtsbpf0irpV4KeCfeXiv6Qm47iyPGr-x8f96o-y5OmshU0iZZb2FqdZitKfvN0cymYBeq7eeWS9OJSKSWgGrBYZDJp1kAUVLwlCTpLXMQsSt58ptMRnO-ALPhoOjfmG4reowEkpvkTXwA20',
                     badge: 'Best Vibe',
                     featured: true,
@@ -48,7 +49,7 @@ const INITIAL_MESSAGES = [
                     id: 3,
                     name: 'Air Max 270',
                     color: 'Triple White',
-                    price: 144,
+                    price: 3600000,
                     image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD9t3YIuCIONp__ieTj-01FjNI4qKViScLPpye53fZMZ8z2gAnpA3WL2ug7H1JeHuUvz1V-zz2oECkFjwU_ztXWpJuezR1wS-8PjdpnmSCqPUqdrrISBqv3WiWgHNNyQqMm_tr-OROEVU5xiQmsP7sJRwlXuVUuWlPbozk5w6JTi9kGZV4A-QrDOou1PwpmBd31giLRbn9DmJdjdnTxtmcwmoh7iKYQMqrZCWAAp87PA9b9tXEdWVntZ6aJdS5qGzxmh1xY_A1HK9w',
                     badge: 'Flash Sale',
                     badgeColor: 'bg-red-600',
@@ -287,7 +288,7 @@ const ChatBoxPage: React.FC = () => {
                                                                 </div>
                                                                 <div className="px-2">
                                                                     <h3 className={`font-black text-xl mb-1 uppercase italic tracking-tighter ${product.featured ? 'text-charcoal' : ''}`}>{product.name}</h3>
-                                                                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-6 ${product.featured ? 'text-charcoal/60' : 'opacity-40'}`}>{product.color} • ${product.price}</p>
+                                                                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-6 ${product.featured ? 'text-charcoal/60' : 'opacity-40'}`}>{product.color} • {formatPrice(product.price)}</p>
                                                                     <button
                                                                         onClick={() => handleAddToCart(product.name)}
                                                                         className={`w-full py-4 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all flex items-center justify-center gap-2 ${product.featured

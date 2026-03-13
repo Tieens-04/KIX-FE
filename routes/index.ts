@@ -22,6 +22,7 @@ import AdminProductsPage from '../pages/AdminProductsPage';
 import StoreManagerPage from '../pages/StoreManagerPage';
 import AdminStockTicketsPage from '../pages/AdminStockTicketsPage';
 import StoreStockTicketsPage from '../pages/StoreStockTicketsPage';
+import AdminPromotionsPage from '../pages/AdminPromotionsPage';
 
 export interface RouteConfig {
     path: string;
@@ -61,6 +62,7 @@ export const routes: RouteConfig[] = [
     { path: '/admin/customers', element: AdminCustomersPage, exact: true, requireAuth: true, roles: ['admin'] },
     { path: '/admin/orders', element: AdminOrdersPage, exact: true, requireAuth: true, roles: ['admin', 'store_manager'] },
     { path: '/admin/products', element: AdminProductsPage, exact: true, requireAuth: true, roles: ['admin'] },
+    { path: '/admin/promotions', element: AdminPromotionsPage, exact: true, requireAuth: true, roles: ['admin'] },
     { path: '/admin/settings', element: AdminSettingsPage, exact: true, requireAuth: true, roles: ['admin'] },
     { path: '/admin', element: AdminPage, exact: true, requireAuth: true, roles: ['admin'] },
 ];

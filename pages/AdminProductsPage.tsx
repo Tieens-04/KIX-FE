@@ -7,6 +7,7 @@ import { storeApi } from '../services/storeApi';
 import { inventoryApi } from '../services/inventoryApi';
 import { colorApi } from '../services/colorApi';
 import { Store, Color } from '../types';
+import { formatPrice } from '../utils/formatPrice';
 
 // ======= Add/Edit Product Modal =======
 interface ProductFormProps {
@@ -208,20 +209,20 @@ const ProductFormModal: React.FC<ProductFormProps> = ({ product, onClose, onSave
                     <div>
                         <label className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest mb-2 opacity-60">
                             <span className="material-symbols-outlined text-[14px] text-primary">payments</span>
-                            Giá (USD) <span className="text-red-400">*</span>
+                            Giá (VND) <span className="text-red-400">*</span>
                         </label>
                         <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-primary">$</span>
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-primary">₫</span>
                             <input
                                 type="number"
-                                min="0"
-                                step="0.01"
+                                min="1000"
+                                step="1"
                                 value={price}
                                 onChange={(e) => setPrice(e.target.value)}
                                 onBlur={() => markTouched('price')}
                                 className={`w-full bg-gray-50 border-2 rounded-xl pl-10 pr-4 py-3 text-sm font-bold placeholder:font-normal placeholder:opacity-40 focus:ring-2 focus:ring-primary/30 focus:border-primary focus:bg-white transition-all outline-none ${touched.price && !price ? 'border-red-300 bg-red-50/50' : 'border-gray-200'
                                     }`}
-                                placeholder="189.00"
+                                placeholder="4725000"
                             />
                         </div>
                         {touched.price && !price && (
@@ -508,7 +509,7 @@ const SKUInventoryModal: React.FC<SKUModalProps> = ({ product, stores, colors, o
                         <div>
                             <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">SKU & Inventory Management</p>
                             <h2 className="text-2xl font-black uppercase italic tracking-tighter">{product.name}</h2>
-                            <p className="text-xs font-bold opacity-40 mt-1">{product.brand} • ${product.price}</p>
+                            <p className="text-xs font-bold opacity-40 mt-1">{product.brand} • {formatPrice(product.price)}</p>
                         </div>
                         <button onClick={onClose} className="size-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-primary transition-colors">
                             <span className="material-symbols-outlined">close</span>
@@ -1136,7 +1137,7 @@ const AdminProductsPage: React.FC = () => {
                                                         <span className="px-3 py-1 bg-gray-100 rounded-full text-[10px] font-black uppercase">{p.brand}</span>
                                                     </td>
                                                     <td className="px-6 py-4">
-                                                        <span className="font-black text-lg text-primary">${p.price}</span>
+                                                        <span className="font-black text-lg text-primary">{formatPrice(p.price)}</span>
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         {/* Toggle: controls customer visibility only */}

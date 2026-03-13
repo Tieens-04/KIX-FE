@@ -90,8 +90,8 @@ const AdminAnalyticsPage: React.FC = () => {
                                 <span className="text-[10px] font-black text-green-400 bg-green-400/20 px-2 py-1 rounded-full">+18.2%</span>
                             </div>
                             <p className="text-xs font-bold opacity-40 uppercase tracking-widest mb-1">Total Revenue</p>
-                            <p className="text-4xl font-black italic text-primary">$142.5K</p>
-                            <p className="text-xs opacity-50 mt-2">vs $120.4K last period</p>
+                            <p className="text-4xl font-black italic text-primary">3.562.500K VND</p>
+                            <p className="text-xs opacity-50 mt-2">vs 3.010.000K VND last period</p>
                         </motion.div>
 
                         <motion.div
@@ -132,8 +132,8 @@ const AdminAnalyticsPage: React.FC = () => {
                                 <span className="text-[10px] font-black text-red-600 bg-red-100 px-2 py-1 rounded-full">-2.1%</span>
                             </div>
                             <p className="text-xs font-bold text-charcoal/60 uppercase tracking-widest mb-1">Avg. Order Value</p>
-                            <p className="text-4xl font-black italic text-charcoal">$77.12</p>
-                            <p className="text-xs text-charcoal/50 mt-2">vs $78.78 last period</p>
+                            <p className="text-4xl font-black italic text-charcoal">1.928.000 VND</p>
+                            <p className="text-xs text-charcoal/50 mt-2">vs 1.969.500 VND last period</p>
                         </motion.div>
                     </div>
                 </motion.section>
@@ -155,7 +155,7 @@ const AdminAnalyticsPage: React.FC = () => {
                                 <p className="text-xs font-bold opacity-40 uppercase tracking-widest mt-1">Daily performance breakdown</p>
                             </div>
                             <div className="text-right">
-                                <p className="text-3xl font-black italic text-primary">$141.5K</p>
+                                <p className="text-3xl font-black italic text-primary">3.537.500K VND</p>
                                 <p className="text-xs opacity-50">This week</p>
                             </div>
                         </div>
@@ -291,7 +291,7 @@ const AdminAnalyticsPage: React.FC = () => {
                     {[
                         { label: 'Conversion Rate', value: '3.42%', change: '+0.8%', positive: true, icon: 'conversion_path' },
                         { label: 'Cart Abandonment', value: '68.5%', change: '-2.3%', positive: true, icon: 'remove_shopping_cart' },
-                        { label: 'Customer Lifetime Value', value: '$284', change: '+$12', positive: true, icon: 'diamond' },
+                        { label: 'Customer Lifetime Value', value: '7.100.000 VND', change: '+300.000 VND', positive: true, icon: 'diamond' },
                     ].map((stat) => (
                         <motion.div
                             key={stat.label}

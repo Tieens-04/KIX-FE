@@ -7,6 +7,7 @@ import { cartApi } from '../services/cartApi';
 import { orderApi } from '../services/orderApi';
 import { useAuth } from '../context/AuthContext';
 import danangData from '../utils/province';
+import { formatPrice } from '../utils/formatPrice';
 
 interface CartDisplayItem {
     id: string;
@@ -79,17 +80,30 @@ const PaymentPage: React.FC = () => {
         : [];
 
     // Payment
+    const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'vnpay'>('credit_card');
     const [cardName, setCardName] = useState('');
     const [cardNumber, setCardNumber] = useState('');
     const [expiry, setExpiry] = useState('');
     const [cvv, setCvv] = useState('');
 
+    // VNPay options
+    const [showVnpayModal, setShowVnpayModal] = useState(false);
+    const [vnpayOption, setVnpayOption] = useState('');
+    const vnpayOptions = [
+        { key: 'VNPAYQR', icon: 'qr_code_2', label: 'QR Code', desc: 'Quét mã QR bằng app ngân hàng', color: '#005BAA' },
+        { key: 'VNBANK', icon: 'account_balance', label: 'ATM / Internet Banking', desc: 'Thẻ ATM nội địa / Tài khoản ngân hàng', color: '#00875A' },
+        { key: 'INTCARD', icon: 'credit_card', label: 'Thẻ quốc tế', desc: 'Visa, MasterCard, JCB, UnionPay', color: '#FF6B00' },
+    ];
     // State
     const [items, setItems] = useState<CartDisplayItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
+
+    // Promo code from CartPage
+    const [promoCode, setPromoCode] = useState<string | null>(null);
+    const [promoDiscount, setPromoDiscount] = useState(0);
 
     // Pre-fill from user
     useEffect(() => {
@@ -121,12 +135,17 @@ const PaymentPage: React.FC = () => {
             } catch (e) { console.error(e); }
             setLoading(false);
         })();
+        // Load promo from sessionStorage
+        const savedCode = sessionStorage.getItem('kix_promo_code');
+        const savedDiscount = sessionStorage.getItem('kix_promo_discount');
+        if (savedCode) setPromoCode(savedCode);
+        if (savedDiscount) setPromoDiscount(Number(savedDiscount));
     }, []);
 
     const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
     const shipping = 0;
     const tax = subtotal * 0.08;
-    const total = subtotal + shipping + tax;
+    const total = subtotal + shipping + tax - promoDiscount;
 
     const goToPayment = () => {
         setError('');
@@ -153,11 +172,47 @@ const PaymentPage: React.FC = () => {
                     city: city.trim(),
                 },
                 payment_method: 'credit_card',
+                promo_code: promoCode || undefined,
             });
+            sessionStorage.removeItem('kix_promo_code');
+            sessionStorage.removeItem('kix_promo_discount');
             setSuccess(true);
         } catch (err: any) {
             const msgs = err?.error;
             setError(Array.isArray(msgs) ? msgs.join('. ') : (err?.message || 'Đặt hàng thất bại.'));
+            setProcessing(false);
+        }
+    };
+
+    const handleVnpayPayment = () => {
+        setError('');
+        setShowVnpayModal(true);
+    };
+
+    const handleVnpayConfirm = async () => {
+        setError('');
+        setProcessing(true);
+        setShowVnpayModal(false);
+        try {
+            const res = await orderApi.createVnpayUrl({
+                shipping_address: {
+                    recipient_name: recipientName.trim(),
+                    phone: phone.trim(),
+                    address: address.trim(),
+                    ward: ward.trim(),
+                    district: district.trim(),
+                    city: city.trim(),
+                },
+                bank_code: vnpayOption || '',
+                locale: 'vn',
+                promo_code: promoCode || undefined,
+            });
+            sessionStorage.removeItem('kix_promo_code');
+            sessionStorage.removeItem('kix_promo_discount');
+            window.location.href = res.data.paymentUrl;
+        } catch (err: any) {
+            const msgs = err?.error;
+            setError(Array.isArray(msgs) ? msgs.join('. ') : (err?.message || 'Không thể tạo thanh toán VNPay.'));
             setProcessing(false);
         }
     };
@@ -333,18 +388,61 @@ const PaymentPage: React.FC = () => {
                                 <div className="bg-white dark:bg-card-dark rounded-[2rem] border-2 border-gray-100 dark:border-border-dark p-8 md:p-10 shadow-sm">
                                     <h2 className="text-2xl font-black uppercase italic tracking-tighter mb-1 flex items-center gap-3">
                                         <span className="material-symbols-outlined text-primary">credit_card</span>
-                                        Thanh toán
+                                        Phương thức thanh toán
                                     </h2>
-                                    <p className="text-xs font-bold opacity-40 mb-8">Nhập thông tin thẻ để hoàn tất</p>
+                                    <p className="text-xs font-bold opacity-40 mb-6">Chọn cách bạn muốn thanh toán</p>
 
-                                    <div className="space-y-5">
-                                        <InputField label="Tên chủ thẻ" placeholder="NGUYEN VAN A" value={cardName} onChange={(e: any) => setCardName(e.target.value)} />
-                                        <InputField label="Số thẻ" placeholder="0000 0000 0000 0000" value={cardNumber} onChange={(e: any) => setCardNumber(e.target.value)} />
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <InputField label="Ngày hết hạn" placeholder="MM/YY" value={expiry} onChange={(e: any) => setExpiry(e.target.value)} />
-                                            <InputField label="CVV" placeholder="•••" value={cvv} onChange={(e: any) => setCvv(e.target.value)} maxLength={4} />
-                                        </div>
+                                    {/* Method Selector */}
+                                    <div className="grid grid-cols-2 gap-3 mb-8">
+                                        {[
+                                            { key: 'credit_card' as const, icon: 'credit_card', label: 'Thẻ ngân hàng', desc: 'Nhập thông tin thẻ' },
+                                            { key: 'vnpay' as const, icon: 'qr_code_2', label: 'VNPay', desc: 'Thanh toán qua VNPay' },
+                                        ].map((m) => (
+                                            <button
+                                                key={m.key}
+                                                onClick={() => setPaymentMethod(m.key)}
+                                                className={`p-4 rounded-2xl border-2 text-left transition-all ${
+                                                    paymentMethod === m.key
+                                                        ? 'border-primary bg-primary/5 dark:bg-primary/10'
+                                                        : 'border-gray-100 dark:border-border-dark hover:border-primary/40'
+                                                }`}
+                                            >
+                                                <span className={`material-symbols-outlined text-2xl mb-2 block ${paymentMethod === m.key ? 'text-primary' : 'opacity-40'}`}>{m.icon}</span>
+                                                <p className="text-xs font-black uppercase tracking-widest">{m.label}</p>
+                                                <p className="text-[10px] opacity-40 mt-0.5">{m.desc}</p>
+                                            </button>
+                                        ))}
                                     </div>
+
+                                    {/* Credit Card Form */}
+                                    {paymentMethod === 'credit_card' && (
+                                        <div className="space-y-5">
+                                            <InputField label="Tên chủ thẻ" placeholder="NGUYEN VAN A" value={cardName} onChange={(e: any) => setCardName(e.target.value)} />
+                                            <InputField label="Số thẻ" placeholder="0000 0000 0000 0000" value={cardNumber} onChange={(e: any) => setCardNumber(e.target.value)} />
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <InputField label="Ngày hết hạn" placeholder="MM/YY" value={expiry} onChange={(e: any) => setExpiry(e.target.value)} />
+                                                <InputField label="CVV" placeholder="•••" value={cvv} onChange={(e: any) => setCvv(e.target.value)} maxLength={4} />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* VNPay Panel */}
+                                    {paymentMethod === 'vnpay' && (
+                                        <div className="rounded-2xl bg-[#005BAA]/5 dark:bg-[#005BAA]/10 border-2 border-[#005BAA]/20 p-6 flex flex-col items-center gap-4">
+                                            <div className="size-16 rounded-2xl bg-[#005BAA] flex items-center justify-center shadow-lg">
+                                                <span className="material-symbols-outlined text-white text-3xl">qr_code_2</span>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-sm font-black uppercase tracking-widest text-[#005BAA] dark:text-blue-400">Thanh toán qua VNPay</p>
+                                                <p className="text-xs opacity-50 mt-1">Bạn sẽ được chuyển đến cổng VNPay để hoàn tất</p>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 justify-center text-[9px] font-black uppercase tracking-widest opacity-40">
+                                                {['VISA', 'MasterCard', 'ATM', 'QR Code', 'Ví VNPay'].map(b => (
+                                                    <span key={b} className="px-2 py-1 border border-current rounded-lg">{b}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Action Buttons */}
                                     <div className="flex gap-4 mt-8">
@@ -357,9 +455,13 @@ const PaymentPage: React.FC = () => {
                                             Quay lại
                                         </motion.button>
                                         <motion.button
-                                            onClick={placeOrder}
+                                            onClick={paymentMethod === 'vnpay' ? handleVnpayPayment : placeOrder}
                                             disabled={processing}
-                                            className="flex-[1.5] py-4 bg-charcoal dark:bg-primary text-white dark:text-charcoal rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl hover:bg-primary hover:text-charcoal dark:hover:bg-white transition-all disabled:opacity-50"
+                                            className={`flex-[1.5] py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl transition-all disabled:opacity-50 ${
+                                                paymentMethod === 'vnpay'
+                                                    ? 'bg-[#005BAA] text-white hover:bg-[#004a8c]'
+                                                    : 'bg-charcoal dark:bg-primary text-white dark:text-charcoal hover:bg-primary hover:text-charcoal dark:hover:bg-white'
+                                            }`}
                                             whileHover={{ scale: processing ? 1 : 1.02 }}
                                             whileTap={{ scale: processing ? 1 : 0.98 }}
                                         >
@@ -368,23 +470,19 @@ const PaymentPage: React.FC = () => {
                                                     <motion.span className="material-symbols-outlined text-sm" animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>sync</motion.span>
                                                     Đang xử lý...
                                                 </>
+                                            ) : paymentMethod === 'vnpay' ? (
+                                                <>
+                                                    <span className="material-symbols-outlined text-sm">qr_code_2</span>
+                                                    Thanh toán VNPay — {formatPrice(total)}
+                                                </>
                                             ) : (
                                                 <>
-                                                    Hoàn tất — ${total.toFixed(2)}
+                                                    Hoàn tất — {formatPrice(total)}
                                                     <span className="material-symbols-outlined text-sm">east</span>
                                                 </>
                                             )}
                                         </motion.button>
                                     </div>
-                                </div>
-
-                                {/* Other payment methods */}
-                                <div className="grid grid-cols-3 gap-3">
-                                    {['PayPal', 'Apple Pay', 'VNPay'].map(m => (
-                                        <button key={m} className="py-3 border-2 border-gray-100 dark:border-border-dark rounded-2xl text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 hover:border-primary transition-all">
-                                            {m}
-                                        </button>
-                                    ))}
                                 </div>
                             </motion.div>
                         )}
@@ -421,7 +519,7 @@ const PaymentPage: React.FC = () => {
                                                     <p className="text-[9px] opacity-40 uppercase tracking-widest">
                                                         {item.size && `Size ${item.size}`}{item.color && ` • ${item.color}`} • x{item.quantity}
                                                     </p>
-                                                    <p className="text-xs font-black text-primary mt-1">${(item.price * item.quantity).toFixed(2)}</p>
+                                                    <p className="text-xs font-black text-primary mt-1">{formatPrice(item.price * item.quantity)}</p>
                                                 </div>
                                             </div>
                                         ))}
@@ -429,19 +527,24 @@ const PaymentPage: React.FC = () => {
 
                                     <div className="space-y-2 border-t border-white/10 pt-5 mb-5 text-[10px] font-black uppercase tracking-widest">
                                         <div className="flex justify-between opacity-40">
-                                            <span>Tạm tính</span><span>${subtotal.toFixed(2)}</span>
+                                            <span>Tạm tính</span><span>{formatPrice(subtotal)}</span>
                                         </div>
                                         <div className="flex justify-between opacity-40">
                                             <span>Phí ship</span><span className="text-primary italic">Miễn phí</span>
                                         </div>
                                         <div className="flex justify-between opacity-40">
-                                            <span>Thuế (8%)</span><span>${tax.toFixed(2)}</span>
+                                            <span>Thuế (8%)</span><span>{formatPrice(tax)}</span>
                                         </div>
+                                        {promoDiscount > 0 && (
+                                            <div className="flex justify-between text-green-400">
+                                                <span>Giảm giá ({promoCode})</span><span>-{formatPrice(promoDiscount)}</span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="flex justify-between items-end border-t border-white/10 pt-5">
                                         <span className="text-[10px] font-black uppercase tracking-widest">Tổng cộng</span>
-                                        <span className="text-3xl font-black italic text-primary">${total.toFixed(2)}</span>
+                                        <span className="text-3xl font-black italic text-primary">{formatPrice(total)}</span>
                                     </div>
                                 </>
                             )}
@@ -451,6 +554,118 @@ const PaymentPage: React.FC = () => {
 
                 <div className="mt-16"><Footer /></div>
             </main>
+
+            {/* ═══ VNPay Options Modal ═══ */}
+            {showVnpayModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center">
+                    {/* Overlay */}
+                    <motion.div
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                        onClick={() => setShowVnpayModal(false)}
+                    />
+
+                    {/* Modal */}
+                    <motion.div
+                        className="relative bg-white dark:bg-card-dark rounded-[2rem] border-2 border-gray-100 dark:border-border-dark shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
+                        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        transition={{ type: 'spring', duration: 0.5 }}
+                    >
+                        {/* Header */}
+                        <div className="bg-[#005BAA] p-6 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="size-10 bg-white/20 rounded-xl flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-white text-2xl">qr_code_2</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-white font-black text-lg uppercase tracking-tight">VNPay</h3>
+                                    <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest">Chọn phương thức thanh toán</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowVnpayModal(false)}
+                                className="size-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-white text-lg">close</span>
+                            </button>
+                        </div>
+
+                        {/* Options */}
+                        <div className="p-6 space-y-3">
+                            {vnpayOptions.map((opt) => (
+                                <button
+                                    key={opt.key}
+                                    onClick={() => setVnpayOption(opt.key === vnpayOption ? '' : opt.key)}
+                                    className={`w-full p-4 rounded-2xl border-2 text-left transition-all flex items-center gap-4 ${
+                                        vnpayOption === opt.key
+                                            ? 'border-[#005BAA] bg-[#005BAA]/5 dark:bg-[#005BAA]/10 shadow-md'
+                                            : 'border-gray-100 dark:border-border-dark hover:border-[#005BAA]/40 hover:bg-gray-50 dark:hover:bg-white/5'
+                                    }`}
+                                >
+                                    <div
+                                        className="size-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+                                        style={{ backgroundColor: `${opt.color}15` }}
+                                    >
+                                        <span className="material-symbols-outlined text-2xl" style={{ color: opt.color }}>{opt.icon}</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-sm font-black uppercase tracking-widest">{opt.label}</p>
+                                        <p className="text-[10px] opacity-50 mt-0.5">{opt.desc}</p>
+                                    </div>
+                                    <div className={`size-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                        vnpayOption === opt.key
+                                            ? 'border-[#005BAA] bg-[#005BAA]'
+                                            : 'border-gray-300 dark:border-gray-600'
+                                    }`}>
+                                        {vnpayOption === opt.key && (
+                                            <span className="material-symbols-outlined text-white text-xs">check</span>
+                                        )}
+                                    </div>
+                                </button>
+                            ))}
+
+                            {/* Không chọn = VNPay gateway tự chọn */}
+                            <p className="text-[10px] text-center opacity-40 font-bold uppercase tracking-widest mt-2">
+                                Không chọn = VNPay sẽ hiển thị tất cả phương thức
+                            </p>
+                        </div>
+
+                        {/* Amount & Test info */}
+                        <div className="px-6 pb-2">
+                            <div className="bg-gray-50 dark:bg-charcoal rounded-2xl p-4 flex justify-between items-center">
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest opacity-40">Số tiền thanh toán</p>
+                                    <p className="text-2xl font-black text-[#005BAA] italic">{formatPrice(total)}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[9px] font-bold uppercase tracking-widest opacity-30">Sandbox Mode</p>
+                                    <p className="text-[9px] opacity-30">Test card: 9704198526191432198</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="p-6 pt-3 flex gap-3">
+                            <motion.button
+                                onClick={() => setShowVnpayModal(false)}
+                                className="flex-1 py-4 border-2 border-charcoal dark:border-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                            >
+                                Hủy
+                            </motion.button>
+                            <motion.button
+                                onClick={handleVnpayConfirm}
+                                className="flex-[1.5] py-4 bg-[#005BAA] text-white rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl hover:bg-[#004a8c] transition-colors"
+                                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                            >
+                                <span className="material-symbols-outlined text-sm">lock</span>
+                                Tiếp tục thanh toán
+                            </motion.button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
         </motion.div>
     );
 };

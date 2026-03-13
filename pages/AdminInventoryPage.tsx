@@ -5,6 +5,7 @@ import { pageTransition, staggerContainer, staggerItem } from '../utils/animatio
 import { storeApi } from '../services/storeApi';
 import { inventoryApi } from '../services/inventoryApi';
 import { Store } from '../types';
+import { formatPrice } from '../utils/formatPrice';
 
 // ======= Update Quantity Modal =======
 interface UpdateQtyProps {
@@ -372,7 +373,7 @@ const AdminInventoryPage: React.FC = () => {
                                                                 </div>
                                                             </td>
                                                             <td className="px-6 py-5">
-                                                                <span className="font-black text-lg text-primary">${product?.price || '—'}</span>
+                                                                <span className="font-black text-lg text-primary">{product?.price ? formatPrice(product.price) : '—'}</span>
                                                             </td>
                                                             <td className="px-6 py-5 text-center">
                                                                 {getStatusBadge(status)}

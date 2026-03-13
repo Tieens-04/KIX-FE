@@ -7,6 +7,7 @@ import { productApi } from '../services/productApi';
 import { cartApi } from '../services/cartApi';
 import { useAuth } from '../context/AuthContext';
 import { fadeInUp, staggerContainer, staggerItem, pageTransition, scaleIn } from '../utils/animations';
+import { formatPrice } from '../utils/formatPrice';
 
 const colorNameToHex: Record<string, string> = {
     red: '#EF4444', blue: '#3B82F6', green: '#22C55E', yellow: '#EAB308',
@@ -467,10 +468,10 @@ const SneakerDetailPage: React.FC = () => {
 
                         {/* Price */}
                         <motion.div className="flex items-end gap-4" variants={staggerItem}>
-                            <span className="text-6xl font-black text-primary">${product.price}</span>
+                            <span className="text-6xl font-black text-primary">{formatPrice(product.price)}</span>
                             {product.oldPrice && (
                                 <>
-                                    <span className="text-2xl font-bold opacity-30 line-through mb-1">${product.oldPrice}</span>
+                                    <span className="text-2xl font-bold opacity-30 line-through mb-1">{formatPrice(product.oldPrice)}</span>
                                     <span className="bg-red-600 text-white text-xs font-black px-3 py-1 rounded-full uppercase mb-2">
                                         -{Math.round((1 - product.price / product.oldPrice) * 100)}%
                                     </span>
@@ -595,7 +596,7 @@ const SneakerDetailPage: React.FC = () => {
                                 ) : (
                                     <>
                                         <span className="material-symbols-outlined font-black">shopping_cart</span>
-                                        Add to Cart — ${(product.price * quantity).toFixed(2)}
+                                        Add to Cart — {formatPrice(product.price * quantity)}
                                     </>
                                 )}
                             </button>
@@ -690,7 +691,7 @@ const SneakerDetailPage: React.FC = () => {
                                             { label: 'Thương hiệu', value: product.brand || 'N/A' },
                                             { label: 'Danh mục', value: product.category || 'Sneaker' },
                                             { label: 'Phối màu', value: product.colorway || 'N/A' },
-                                            { label: 'Giá', value: `$${product.price}` },
+                                            { label: 'Giá', value: formatPrice(product.price) },
                                             { label: 'Trạng thái', value: product.status === 'active' ? 'Đang bán' : product.status || 'N/A' },
                                             { label: 'Số lượng SKU', value: String(skus.length) },
                                             { label: 'Số cửa hàng có hàng', value: String(skuAvailability.length) },

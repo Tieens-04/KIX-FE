@@ -8,8 +8,8 @@ import Footer from '../components/Footer';
 import AISearchModal from '../components/AISearchModal';
 import { searchSneakers } from '../services/geminiService';
 import { fadeInUp, fadeInLeft, fadeInRight, staggerContainer, staggerItem, scaleIn, pageTransition } from '../utils/animations';
-import { cartApi } from '../services/cartApi';
 import { useAuth } from '../context/AuthContext';
+import { formatPrice } from '../utils/formatPrice';
 
 const Homepage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -68,12 +68,7 @@ const Homepage: React.FC = () => {
             showToast('Vui lòng đăng nhập để thêm vào giỏ!');
             return;
         }
-        try {
-            await cartApi.addItem({ product_id: (product as any)._id || (product as any).id, quantity: 1 });
-            showToast(`'${product.name}' added to your box!`);
-        } catch (err: any) {
-            showToast(err?.message || 'Không thể thêm vào giỏ');
-        }
+        showToast(`'${product.name}' added to your box!`);
     };
 
     return (
@@ -350,7 +345,7 @@ const Homepage: React.FC = () => {
                                 <h3 className="font-black text-2xl mb-1 leading-tight uppercase italic">VaporMax Flyknit</h3>
                                 <p className="text-xs font-bold opacity-40 mb-6 uppercase tracking-widest">Streetwear • Red/Black</p>
                                 <div className="flex justify-between items-center">
-                                    <p className="font-black text-3xl">$189</p>
+                                    <p className="font-black text-3xl">{formatPrice(PRODUCTS[0].price)}</p>
                                     <button
                                         onClick={() => handleAddToCart(PRODUCTS[0])}
                                         className="bg-primary p-3 rounded-2xl text-charcoal shadow-lg hover:bg-charcoal hover:text-white transition-colors"
@@ -382,7 +377,7 @@ const Homepage: React.FC = () => {
                                     <span className="material-symbols-outlined text-charcoal text-4xl">verified</span>
                                 </div>
                                 <div className="flex justify-between items-end">
-                                    <p className="font-black text-charcoal text-4xl">$120</p>
+                                    <p className="font-black text-charcoal text-4xl">{formatPrice(3000000)}</p>
                                     <div className="flex -space-x-3">
                                         <div className="size-8 rounded-full border-2 border-primary bg-charcoal"></div>
                                         <div className="size-8 rounded-full border-2 border-primary bg-white"></div>
@@ -401,7 +396,7 @@ const Homepage: React.FC = () => {
                                 </div>
                                 <div className="px-2">
                                     <h3 className="font-black text-sm uppercase">Air Max 270</h3>
-                                    <p className="font-black text-primary text-lg">$144</p>
+                                    <p className="font-black text-primary text-lg">{formatPrice(3600000)}</p>
                                 </div>
                             </div>
                             <div className="group bg-background-alt dark:bg-card-dark rounded-3xl border border-transparent p-3 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
@@ -413,7 +408,7 @@ const Homepage: React.FC = () => {
                                 </div>
                                 <div className="px-2">
                                     <h3 className="font-black text-sm uppercase opacity-40 line-through">Jordan Retro 1</h3>
-                                    <p className="font-black text-charcoal/30 dark:text-white/30 text-lg">$299</p>
+                                    <p className="font-black text-charcoal/30 dark:text-white/30 text-lg">{formatPrice(7475000)}</p>
                                 </div>
                             </div>
                         </div>

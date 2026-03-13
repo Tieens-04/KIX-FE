@@ -30,7 +30,7 @@ const FAKE_AI_RESPONSES = [
         message: "Great choice! Based on your preference, I recommend the VaporMax Flyknit in Volt Green - it's perfect for sporty daily wear with that pop of color you're looking for!",
         product: {
             name: 'VaporMax Flyknit',
-            price: '$189',
+            price: '4,725,000 VND',
             image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCHMZknoZRs2WowTcCOqzTvQDMzLZ8ItmAP-mYDHzeTTnHxwIDD_z6Z9Ry6l6ULBESKvNcc-OSyh3w4vEyHhLixbl69HQ3e9ELV_HO1mZibN8S-UjAp0xXLlpfy_eGomnJzBbJWUbm-M17T9ux7_Nl4txhhfVLMiG_cwZKfLYEQjlqdeDhFH50Yf0cYK3qPXiTnilXBv1P4w0a_YO4cw7z-HU0AHAa933R1ABVEDuSVDbV9w5lBq8a5HHNE0vVOzBBVdBMlv6OlYOo',
         },
     },
@@ -147,7 +147,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     }, [selectedPriceRange]);
 
     const formatPrice = (val: number) => {
-        return val.toLocaleString('en-US') + 'đ';
+        return new Intl.NumberFormat('vi-VN').format(val) + ' VND';
     };
 
     return (

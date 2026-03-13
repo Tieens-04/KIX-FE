@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 const SAMPLE_MESSAGES = [
     { id: 1, role: 'assistant', content: 'Hello! I\'m your KIX Admin AI Assistant. How can I help you manage your stores today?', timestamp: '10:24 AM' },
     { id: 2, role: 'user', content: 'What\'s the performance of our NYC store?', timestamp: '10:25 AM' },
-    { id: 3, role: 'assistant', content: 'The **NYC Flagship store** is performing excellently! Here are the key metrics:\n\n📊 **Performance:** 92%\n💰 **Revenue:** $284.5K (this month)\n🛍️ **Sales:** 1,247 transactions\n👔 **Manager:** John Smith\n\nIt\'s your top-performing location. Would you like detailed analytics?', timestamp: '10:25 AM' },
+    { id: 3, role: 'assistant', content: 'The **NYC Flagship store** is performing excellently! Here are the key metrics:\n\n📊 **Performance:** 92%\n💰 **Revenue:** 7.112.500K VND (this month)\n🛍️ **Sales:** 1,247 transactions\n👔 **Manager:** John Smith\n\nIt\'s your top-performing location. Would you like detailed analytics?', timestamp: '10:25 AM' },
     { id: 4, role: 'user', content: 'How about inventory alerts?', timestamp: '10:26 AM' },
     { id: 5, role: 'assistant', content: 'I found **18 low stock alerts** across your network:\n\n⚠️ **NYC** - Dunk Low Pro (12 units)\n⚠️ **Tokyo** - Onitsuka Tiger (0 units - sold out)\n⚠️ **Paris** - Stan Smith (7 units)\n\nWould you like me to prepare a restock order?', timestamp: '10:26 AM' },
 ];

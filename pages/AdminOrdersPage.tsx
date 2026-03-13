@@ -4,6 +4,7 @@ import AdminLayout from '../components/AdminLayout';
 import { pageTransition, staggerContainer, staggerItem } from '../utils/animations';
 import { orderApi } from '../services/orderApi';
 import { Order } from '../types';
+import { formatPrice } from '../utils/formatPrice';
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
     pending: { bg: 'bg-yellow-100', text: 'text-yellow-700' },

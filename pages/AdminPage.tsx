@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import L from "leaflet";
 import AdminLayout from "../components/AdminLayout";
 import {
   pageTransition,
@@ -10,6 +12,42 @@ import { storeApi } from "../services/storeApi";
 import { userApi } from "../services/userApi";
 import { Store, User } from "../types";
 import danangData from "../utils/province";
+
+const STORE_FEATURES = [
+  { id: "custom-lab", name: "Customization Lab", icon: "brush" },
+  { id: "dj-booth",   name: "DJ Booth",          icon: "music_note" },
+  { id: "raffle",     name: "Limited Raffles",   icon: "confirmation_number" },
+  { id: "cafe",       name: "Sneaker Café",      icon: "local_cafe" },
+  { id: "vip",        name: "VIP Lounge",        icon: "diamond" },
+];
+
+const parseHours = (h?: string) => {
+  const match = h?.match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+  return match
+    ? { open: match[1].padStart(5, "0"), close: match[2].padStart(5, "0") }
+    : { open: "09:00", close: "22:00" };
+};
+
+// Leaflet marker icon
+const mapMarkerIcon = new L.Icon({
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
+// Click-to-pick handler component
+const MapClickHandler: React.FC<{ onPick: (lat: number, lng: number) => void }> = ({ onPick }) => {
+  useMapEvents({
+    click(e) {
+      onPick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+};
 
 // ======= Store Form Modal (Add / Edit + Manager assignment) =======
 interface StoreFormProps {
@@ -43,6 +81,7 @@ const StoreFormModal: React.FC<StoreFormProps> = ({
   };
 
   const parsed = parseAddress(store?.address || "");
+  const parsedHrs = parseHours(store?.hours);
   const [name, setName] = useState(store?.name || "");
   const [street, setStreet] = useState(parsed.street);
   const [district, setDistrict] = useState(parsed.district);
@@ -50,12 +89,48 @@ const StoreFormModal: React.FC<StoreFormProps> = ({
   const [phone, setPhone] = useState(store?.phone || "");
   const [status, setStatus] = useState(store?.status || "active");
   const [managerId, setManagerId] = useState(store?.manager_id || "");
+  // Display fields
+  const [openTime, setOpenTime] = useState(parsedHrs.open);
+  const [closeTime, setCloseTime] = useState(parsedHrs.close);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>(store?.image || "");
+  const [badge, setBadge] = useState(store?.badge || "");
+  const [featured, setFeatured] = useState(store?.featured ?? false);
+  const [storeFeatures, setStoreFeatures] = useState<string[]>(store?.features || []);
+  const [lat, setLat] = useState<string>(store?.lat != null ? String(store.lat) : "");
+  const [lng, setLng] = useState<string>(store?.lng != null ? String(store.lng) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const [managers, setManagers] = useState<User[]>([]);
   const [loadingManagers, setLoadingManagers] = useState(true);
   const [managerSearch, setManagerSearch] = useState("");
+  const [geocoding, setGeocoding] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+
+  const geocodeAddress = useCallback(async () => {
+    const fullAddress = [street.trim(), ward, district, danangData.tinh].filter(Boolean).join(", ");
+    if (!fullAddress || (!street.trim() && !district)) {
+      setError("Nhập địa chỉ trước khi lấy tọa độ");
+      return;
+    }
+    setGeocoding(true);
+    setError("");
+    try {
+      const q = encodeURIComponent(fullAddress);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=vn`);
+      const data = await res.json();
+      if (data.length > 0) {
+        setLat(String(parseFloat(data[0].lat).toFixed(6)));
+        setLng(String(parseFloat(data[0].lon).toFixed(6)));
+      } else {
+        setError("Không tìm thấy tọa độ cho địa chỉ này. Thử chọn trên bản đồ.");
+      }
+    } catch {
+      setError("Lỗi khi lấy tọa độ. Kiểm tra kết nối mạng.");
+    }
+    setGeocoding(false);
+  }, [street, ward, district]);
 
   useEffect(() => {
     const fetchManagers = async () => {
@@ -102,17 +177,43 @@ const StoreFormModal: React.FC<StoreFormProps> = ({
     const address = `${street.trim()}, ${ward}, ${district}, ${danangData.tinh}`;
     setSaving(true);
     try {
-      const payload: any = {
-        name: name.trim(),
-        address: address.trim(),
-        phone: phone.trim() || undefined,
-        status,
-        manager_id: managerId || null,
-      };
-      if (isEdit) {
-        await storeApi.update(store!.id || (store as any)._id, payload);
+      const storeId = store?.id || (store as any)?._id;
+
+      if (imageFile) {
+        // Gửi bằng FormData (multipart)
+        const fd = new FormData();
+        fd.append("name", name.trim());
+        fd.append("address", address.trim());
+        if (phone.trim()) fd.append("phone", phone.trim());
+        fd.append("status", status);
+        if (managerId) fd.append("manager_id", managerId); else fd.append("manager_id", "");
+        fd.append("hours", `${openTime} - ${closeTime}`);
+        fd.append("badge", badge.trim());
+        fd.append("featured", String(featured));
+        fd.append("features", JSON.stringify(storeFeatures));
+        fd.append("storeImage", imageFile);
+        if (lat.trim()) fd.append("lat", lat.trim());
+        if (lng.trim()) fd.append("lng", lng.trim());
+        if (isEdit) await storeApi.updateWithImage(storeId, fd);
+        else        await storeApi.createWithImage(fd);
       } else {
-        await storeApi.create(payload);
+        // Không có file mới — gửi JSON bình thường
+        const payload: any = {
+          name: name.trim(),
+          address: address.trim(),
+          phone: phone.trim() || undefined,
+          status,
+          manager_id: managerId || null,
+          hours: `${openTime} - ${closeTime}`,
+          image: imagePreview || null,
+          badge: badge.trim() || null,
+          featured,
+          features: storeFeatures,
+          lat: lat.trim() ? parseFloat(lat.trim()) : null,
+          lng: lng.trim() ? parseFloat(lng.trim()) : null,
+        };
+        if (isEdit) await storeApi.update(storeId, payload);
+        else        await storeApi.create(payload);
       }
       if (managerId) {
         try {
@@ -266,6 +367,250 @@ const StoreFormModal: React.FC<StoreFormProps> = ({
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Display Info Section */}
+            <div className="pt-4 border-t border-gray-100 space-y-5">
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-50 flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-sm">tune</span>
+                Thông tin hiển thị
+              </p>
+
+              {/* Hours */}
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest mb-2 opacity-50">
+                  Giờ hoạt động
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="time"
+                    value={openTime}
+                    onChange={(e) => setOpenTime(e.target.value)}
+                    className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                  <span className="text-sm font-black opacity-40">—</span>
+                  <input
+                    type="time"
+                    value={closeTime}
+                    onChange={(e) => setCloseTime(e.target.value)}
+                    className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Image Upload */}
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest mb-2 opacity-50">
+                  Ảnh Store
+                </label>
+                {imagePreview && (
+                  <div className="relative mb-3 rounded-xl overflow-hidden border border-gray-200">
+                    <img
+                      src={imagePreview}
+                      alt="preview"
+                      className="w-full h-40 object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setImageFile(null); setImagePreview(""); }}
+                      className="absolute top-2 right-2 size-7 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 shadow"
+                    >
+                      <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
+                  </div>
+                )}
+                <label className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-primary hover:bg-primary/5 transition-all">
+                  <span className="material-symbols-outlined text-primary">upload</span>
+                  <span className="text-xs font-bold text-gray-500">
+                    {imageFile ? imageFile.name : "Chọn ảnh (JPG, PNG, WEBP — tối đa 5MB)"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setImageFile(file);
+                      setImagePreview(URL.createObjectURL(file));
+                    }}
+                  />
+                </label>
+              </div>
+
+              {/* Badge + Featured */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest mb-2 opacity-50">
+                    Badge
+                  </label>
+                  <input
+                    value={badge}
+                    onChange={(e) => setBadge(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-primary focus:border-transparent"
+                    placeholder="VD: New, Flagship, Hot..."
+                  />
+                </div>
+                <div className="flex flex-col justify-end">
+                  <label className="block text-[10px] font-black uppercase tracking-widest mb-2 opacity-50">
+                    Nổi bật (Featured)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setFeatured(!featured)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 font-black text-xs uppercase tracking-wide transition-all ${featured ? "border-primary bg-primary/10 text-charcoal" : "border-gray-200 bg-gray-50 opacity-60"}`}
+                  >
+                    <span className={`size-5 rounded-full flex items-center justify-center ${featured ? "bg-primary" : "bg-gray-300"}`}>
+                      {featured && <span className="material-symbols-outlined text-[14px] text-charcoal">check</span>}
+                    </span>
+                    {featured ? "Đang nổi bật" : "Không nổi bật"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Tọa độ bản đồ (Lat / Lng) */}
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest mb-2 opacity-50 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-sm">pin_drop</span>
+                  Tọa độ trên bản đồ
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest mb-1 opacity-40">
+                      Latitude (Vĩ độ)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={lat}
+                      onChange={(e) => setLat(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-primary focus:border-transparent"
+                      placeholder="VD: 16.0544"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest mb-1 opacity-40">
+                      Longitude (Kinh độ)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={lng}
+                      onChange={(e) => setLng(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-primary focus:border-transparent"
+                      placeholder="VD: 108.2022"
+                    />
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={geocodeAddress}
+                    disabled={geocoding}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide transition-all ${
+                      geocoding
+                        ? "bg-gray-100 opacity-60 cursor-wait"
+                        : "bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100"
+                    }`}
+                  >
+                    <span className={`material-symbols-outlined text-sm ${geocoding ? "animate-spin" : ""}`}>
+                      {geocoding ? "progress_activity" : "location_searching"}
+                    </span>
+                    {geocoding ? "Đang tìm..." : "Lấy tọa độ từ địa chỉ"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowMapPicker(!showMapPicker)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide transition-all border ${
+                      showMapPicker
+                        ? "bg-primary/10 text-charcoal border-primary/30"
+                        : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-sm">map</span>
+                    {showMapPicker ? "Ẩn bản đồ" : "Chọn trên bản đồ"}
+                  </button>
+                </div>
+
+                {/* Mini Map Picker */}
+                <AnimatePresence>
+                  {showMapPicker && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 280, opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="mt-3 rounded-xl overflow-hidden border-2 border-primary/30"
+                    >
+                      <MapContainer
+                        center={[
+                          lat ? parseFloat(lat) : 16.0544,
+                          lng ? parseFloat(lng) : 108.2022,
+                        ]}
+                        zoom={lat && lng ? 16 : 13}
+                        style={{ height: 280, width: "100%" }}
+                        scrollWheelZoom={true}
+                      >
+                        <TileLayer
+                          attribution='&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>'
+                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+                        <MapClickHandler
+                          onPick={(newLat, newLng) => {
+                            setLat(String(newLat.toFixed(6)));
+                            setLng(String(newLng.toFixed(6)));
+                          }}
+                        />
+                        {lat && lng && (
+                          <Marker
+                            position={[parseFloat(lat), parseFloat(lng)]}
+                            icon={mapMarkerIcon}
+                          />
+                        )}
+                      </MapContainer>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <p className="mt-2 text-[10px] font-bold opacity-40 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">info</span>
+                  {showMapPicker ? "Click vào bản đồ để chọn vị trí store" : "Nhấn \"Lấy tọa độ\" hoặc \"Chọn trên bản đồ\""}
+                </p>
+              </div>
+
+              {/* Features */}
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest mb-3 opacity-50">
+                  Tiện ích Store
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {STORE_FEATURES.map((f) => {
+                    const active = storeFeatures.includes(f.id);
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() =>
+                          setStoreFeatures(
+                            active
+                              ? storeFeatures.filter((x) => x !== f.id)
+                              : [...storeFeatures, f.id]
+                          )
+                        }
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border font-bold text-xs transition-all ${active ? "border-primary bg-primary/10 text-charcoal" : "border-gray-200 bg-gray-50 opacity-60 hover:opacity-100"}`}
+                      >
+                        <span className="material-symbols-outlined text-primary text-sm">{f.icon}</span>
+                        {f.name}
+                        {active && (
+                          <span className="material-symbols-outlined text-primary text-[12px] ml-auto">check_circle</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
